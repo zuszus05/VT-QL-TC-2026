@@ -1,11 +1,20 @@
-<div align="center">
+# Quản lý học sinh tăng cường
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Ứng dụng web nội bộ dành cho quản lý học sinh học tăng cường.
 
-  <h1>Built with AI Studio</h2>
+## Trạng thái hiện tại
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+Dự án mới hoàn thành bước đặc tả kỹ thuật.
+Chưa kết nối Firebase.
+Chưa xây dựng chức năng nghiệp vụ.
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Chạy dự án
 
-</div>
+1. Cài Node.js.
+2. Chạy npm install.
+3. Chạy npm run dev.
+
+## Kiểm tra
+
+- npm run typecheck
+- npm run build

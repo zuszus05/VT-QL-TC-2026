@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .app-viewport-height {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .app-min-viewport-height {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .toast-safe-area {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+    width: auto;
+  }
+
+  @media (min-width: 768px) {
+    .toast-safe-area {
+      bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+      left: auto;
+      width: 100%;
+      max-width: 28rem;
+    }
+  }
+
+  .header-safe-padding {
+    padding-top: calc(0.875rem + env(safe-area-inset-top, 0px));
+    padding-bottom: 0.875rem;
+    padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .header-safe-padding {
+      padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+      padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
+    }
+  }
+
+  @media (min-width: 768px) {
+    .header-safe-padding {
+      padding-left: calc(2rem + env(safe-area-inset-left, 0px));
+      padding-right: calc(2rem + env(safe-area-inset-right, 0px));
+    }
+  }
+
+  .main-safe-padding {
+    padding-top: 1rem;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .main-safe-padding {
+      padding-top: 1.5rem;
+      padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+      padding-left: calc(1.5rem + env(safe-area-inset-left, 0px));
+      padding-right: calc(1.5rem + env(safe-area-inset-right, 0px));
+    }
+  }
+
+  @media (min-width: 768px) {
+    .main-safe-padding {
+      padding-top: 2rem;
+      padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+      padding-left: calc(2rem + env(safe-area-inset-left, 0px));
+      padding-right: calc(2rem + env(safe-area-inset-right, 0px));
+    }
+  }
+
+  .modal-overlay-safe {
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .modal-overlay-safe {
+      padding-top: max(1rem, env(safe-area-inset-top, 0px));
+      padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+      padding-left: max(1rem, env(safe-area-inset-left, 0px));
+      padding-right: max(1rem, env(safe-area-inset-right, 0px));
+    }
+  }
+
+  .modal-card-max-height {
+    max-height: calc(100vh - 1.5rem);
+    max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  @media (min-width: 640px) {
+    .modal-card-max-height {
+      max-height: calc(100vh - 2rem);
+      max-height: calc(100dvh - 2rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    }
+  }
+}
+
+/* Touch targets and font size for coarse pointer devices (iOS/Android touch screens) */
+@media (any-pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  button,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .touch-choice-label {
+    min-height: 44px;
+  }
+}
+
