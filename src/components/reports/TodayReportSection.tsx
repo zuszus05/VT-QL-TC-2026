@@ -413,15 +413,15 @@ export function TodayReportSection({
       ) : (
         <>
           {/* Các thẻ thống kê */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {stats.map((item, idx) => (
-              <Card key={idx} className="p-4 flex flex-col justify-between">
+              <Card key={idx} className="p-3 sm:p-4 flex flex-col justify-between">
                 <span className="text-xs font-semibold text-slate-500">
                   {item.label}
                 </span>
-                <div className="mt-2 flex items-baseline justify-between">
+                <div className="mt-1.5 flex items-baseline justify-between">
                   <span
-                    className={`text-2xl font-extrabold px-2.5 py-0.5 rounded-lg border ${item.color}`}
+                    className={`text-xl sm:text-2xl font-extrabold px-2.5 py-0.5 rounded-lg border ${item.color}`}
                   >
                     {item.value}
                   </span>
@@ -435,7 +435,7 @@ export function TodayReportSection({
             <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
               Thống kê theo ca
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {sessionStats.map((sStat) => {
                 const hasElement = groupedBySession.some(
                   (g) => g.session === sStat.session
@@ -444,7 +444,7 @@ export function TodayReportSection({
                   <Card
                     key={sStat.session}
                     onClick={() => handleSessionClick(sStat.session)}
-                    className={`p-4 transition-all ${
+                    className={`p-3 sm:p-4 transition-all ${
                       hasElement
                         ? "cursor-pointer hover:border-teal-300 hover:shadow-xs"
                         : ""

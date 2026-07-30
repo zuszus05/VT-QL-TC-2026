@@ -781,7 +781,7 @@ export function ReinforcementPage({
             <>
               {/* Tabs Ngày trong tuần & Lịch sử */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-6">
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2 md:gap-2.5">
                   {DAYS_OF_WEEK.map((d) => {
                     const isActive = activeDayTab === d;
                     return (

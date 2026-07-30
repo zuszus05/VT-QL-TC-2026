@@ -561,7 +561,7 @@ export function MonthlyReportSection({
           {/* 3 Thẻ thống kê */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             {stats.map((item, idx) => (
-              <Card key={idx} className="p-4 flex flex-col justify-between">
+              <Card key={idx} className="p-3 md:p-4 flex flex-col justify-between">
                 <span className="text-xs font-semibold text-slate-500">
                   {item.label}
                 </span>
