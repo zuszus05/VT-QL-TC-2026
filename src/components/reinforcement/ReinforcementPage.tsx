@@ -234,7 +234,7 @@ export function ReinforcementPage({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (isSaving || isSubmittingRef.current) return;
+    if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
 
     try {
@@ -286,33 +286,30 @@ export function ReinforcementPage({
         return;
       }
 
-      setIsSaving(true);
+      setCandidateNumbers("");
+      sbdInputRef.current?.focus();
+      setActiveDayTab(dayOfWeek);
+      showToast("Đã thêm học sinh vào danh sách.", "success");
 
-      try {
-        if (onCreateRecords) {
-          await onCreateRecords(inputsToCreate);
-        } else {
-          const now = new Date().toISOString();
-          const fallbackRecords: ReinforcementScheduleRecord[] = inputsToCreate.map(
-            (inp) => ({
-              extraStudyId: createStableId("extra-study"),
-              ...inp,
-              createdAt: now,
-              updatedAt: now,
-            })
+      if (onCreateRecords) {
+        void onCreateRecords(inputsToCreate).catch((error) => {
+          console.error("[ReinforcementPage] Lỗi khi lưu danh sách tăng cường:", error);
+          showToast(
+            "Không thể đồng bộ danh sách tăng cường. Các học sinh vừa thêm đã được gỡ khỏi danh sách. Vui lòng thử lại.",
+            "error"
           );
-          setExtraStudyRecords((prev) => [...prev, ...fallbackRecords]);
-        }
-
-        setCandidateNumbers("");
-        sbdInputRef.current?.focus();
-        setActiveDayTab(dayOfWeek);
-        showToast("Đã thêm học sinh vào danh sách.", "success");
-      } catch (error) {
-        console.error("[ReinforcementPage] Lỗi khi lưu danh sách tăng cường:", error);
-        showToast("Không thể lưu danh sách tăng cường. Vui lòng thử lại.", "error");
-      } finally {
-        setIsSaving(false);
+        });
+      } else {
+        const now = new Date().toISOString();
+        const fallbackRecords: ReinforcementScheduleRecord[] = inputsToCreate.map(
+          (inp) => ({
+            extraStudyId: createStableId("extra-study"),
+            ...inp,
+            createdAt: now,
+            updatedAt: now,
+          })
+        );
+        setExtraStudyRecords((prev) => [...prev, ...fallbackRecords]);
       }
     } finally {
       isSubmittingRef.current = false;

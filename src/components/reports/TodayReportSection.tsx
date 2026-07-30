@@ -28,6 +28,7 @@ interface TodayReportSectionProps {
   reportError?: string | null;
   onAttendanceRecordsChange?: (records: AttendanceRecord[]) => void;
   onLoadDailyReport?: (date: string) => void;
+  onFinalizeDailyReport?: (date: string) => Promise<boolean>;
   extraStudyRecords?: ReinforcementScheduleRecord[];
   students?: Student[];
   classes?: SchoolClass[];
@@ -39,6 +40,7 @@ export function TodayReportSection({
   reportError = null,
   onAttendanceRecordsChange,
   onLoadDailyReport,
+  onFinalizeDailyReport,
   extraStudyRecords = [],
   students = [],
   classes = [],
@@ -92,7 +94,20 @@ export function TodayReportSection({
 
   const isAllAbsenceFinalized =
     absentRecordsForSelectedDate.length > 0 &&
-    absentRecordsForSelectedDate.every((a) => a.absenceFinalized === true);
+    absentRecordsForSelectedDate.every((a) => a.isFinalized === true);
+
+  const finalizedTimeStr = (() => {
+    if (!isAllAbsenceFinalized) return null;
+    const times = absentRecordsForSelectedDate
+      .map((r) => r.finalizedAt)
+      .filter((t): t is string => Boolean(t));
+    if (times.length === 0) return null;
+    const dateObj = new Date(times[0]);
+    if (isNaN(dateObj.getTime())) return null;
+    const hours = String(dateObj.getHours()).padStart(2, "0");
+    const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  })();
 
   // Thống kê đầu trang: tính theo toàn bộ dữ liệu của selectedDate (không phụ thuộc statusFilter)
   const absentCount = dateProblemRecords.filter(
@@ -232,6 +247,9 @@ export function TodayReportSection({
       } => s !== null
     );
 
+  // State loading khi đang thực hiện chốt vắng
+  const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
+
   // Xử lý chuyển sang Vắng
   const handleSetStatusAbsent = (attId: string) => {
     const nowIso = new Date().toISOString();
@@ -240,8 +258,6 @@ export function TodayReportSection({
         return {
           ...rec,
           status: "absent" as const,
-          absenceFinalized: undefined,
-          absenceFinalizedAt: undefined,
           updatedAt: nowIso,
         };
       }
@@ -262,8 +278,6 @@ export function TodayReportSection({
         return {
           ...rec,
           status: "late" as const,
-          absenceFinalized: undefined,
-          absenceFinalizedAt: undefined,
           updatedAt: nowIso,
         };
       }
@@ -300,27 +314,25 @@ export function TodayReportSection({
     setNoteTarget(null);
   };
 
-  // Xác nhận Chốt vắng
-  const handleConfirmFinalizeAbsence = () => {
-    const nowIso = new Date().toISOString();
-    const updatedRecords = attendanceRecords.map((rec) => {
-      if (rec.attendanceDate === selectedDate && rec.status === "absent") {
-        return {
-          ...rec,
-          absenceFinalized: true,
-          absenceFinalizedAt: nowIso,
-          updatedAt: nowIso,
-        };
+  // Xác nhận Chốt vắng - gọi Firestore thông qua prop onFinalizeDailyReport
+  const handleConfirmFinalizeAbsence = async () => {
+    if (isFinalizing) return;
+    setIsFinalizing(true);
+    try {
+      if (onFinalizeDailyReport) {
+        const success = await onFinalizeDailyReport(selectedDate);
+        if (success) {
+          setShowFinalizeModal(false);
+        }
+      } else {
+        setShowFinalizeModal(false);
       }
-      return rec;
-    });
-
-    if (onAttendanceRecordsChange) {
-      onAttendanceRecordsChange(updatedRecords);
+    } catch (error) {
+      console.error("[TodayReportSection] Lỗi khi chốt vắng:", error);
+      showToast("Không thể chốt vắng. Vui lòng thử lại.", "error");
+    } finally {
+      setIsFinalizing(false);
     }
-
-    showToast("Đã chốt danh sách vắng.", "success");
-    setShowFinalizeModal(false);
   };
 
   const filterOptions: { id: StatusFilter; label: string }[] = [
@@ -377,16 +389,29 @@ export function TodayReportSection({
           </div>
 
           {/* Nút chính: Chốt vắng */}
-          <Button
-            variant={isAllAbsenceFinalized ? "secondary" : "primary"}
-            disabled={
-              isAllAbsenceFinalized || absentRecordsForSelectedDate.length === 0
-            }
-            onClick={() => setShowFinalizeModal(true)}
-            className="text-xs font-bold"
-          >
-            {isAllAbsenceFinalized ? "Đã chốt vắng" : "Chốt vắng"}
-          </Button>
+          <div className="flex flex-col items-end">
+            <Button
+              variant={isAllAbsenceFinalized ? "secondary" : "primary"}
+              disabled={
+                isAllAbsenceFinalized ||
+                absentRecordsForSelectedDate.length === 0 ||
+                isFinalizing
+              }
+              onClick={() => setShowFinalizeModal(true)}
+              className="text-xs font-bold"
+            >
+              {isFinalizing
+                ? "Đang chốt..."
+                : isAllAbsenceFinalized
+                ? "Đã chốt vắng"
+                : "Chốt vắng"}
+            </Button>
+            {isAllAbsenceFinalized && finalizedTimeStr && (
+              <span className="text-[11px] text-slate-500 font-normal block mt-1 text-right">
+                Đã chốt lúc {finalizedTimeStr}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

@@ -22,9 +22,11 @@ import { StudentFormModal, StudentFormData } from "./StudentFormModal";
 import { ExcelImportPreviewModal } from "./ExcelImportPreviewModal";
 import { ExcelValidationModal } from "./ExcelValidationModal";
 import { EmptyState } from "../common/EmptyState";
+import { UserProfile } from "../../types/user";
 import { Button } from "../common/Button";
 
 interface StudentsPageProps {
+  currentUser?: UserProfile | null;
   students?: Student[];
   studentsLoading?: boolean;
   studentsError?: string | null;
@@ -38,6 +40,7 @@ interface StudentsPageProps {
 }
 
 export function StudentsPage({
+  currentUser,
   students = [],
   studentsLoading = false,
   studentsError = null,
@@ -445,14 +448,16 @@ export function StudentsPage({
         </div>
       )}
 
-      {/* Thống kê nhanh */}
-      <StudentStats
-        totalStudents={students.length}
-        totalClasses={classes.length}
-        selectedGrade={selectedGrade}
-        selectedClassId={selectedClassId}
-        classes={classes}
-      />
+      {/* Thống kê nhanh - Ẩn đối với Teacher */}
+      {currentUser?.role !== "teacher" && (
+        <StudentStats
+          totalStudents={students.length}
+          totalClasses={classes.length}
+          selectedGrade={selectedGrade}
+          selectedClassId={selectedClassId}
+          classes={classes}
+        />
+      )}
 
       {/* Bộ lọc */}
       <StudentFilters

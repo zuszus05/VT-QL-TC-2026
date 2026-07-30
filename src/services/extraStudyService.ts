@@ -191,7 +191,8 @@ export function subscribeExtraStudyRecordsByDateRange(
  * Returns the created ReinforcementScheduleRecord array.
  */
 export async function createExtraStudyRecords(
-  inputs: CreateExtraStudyRecordInput[]
+  inputs: CreateExtraStudyRecordInput[],
+  onPrepared?: (records: ReinforcementScheduleRecord[]) => void
 ): Promise<ReinforcementScheduleRecord[]> {
   if (!inputs || inputs.length === 0) {
     return [];
@@ -239,6 +240,16 @@ export async function createExtraStudyRecords(
 
     return { docRef, record, docData };
   });
+
+  const preparedRecords = prepareList.map((item) => item.record);
+
+  if (onPrepared) {
+    try {
+      onPrepared(preparedRecords);
+    } catch (err) {
+      console.error("[extraStudyService] Lỗi trong callback onPrepared:", err);
+    }
+  }
 
   for (let i = 0; i < prepareList.length; i += BATCH_SIZE) {
     const chunk = prepareList.slice(i, i + BATCH_SIZE);

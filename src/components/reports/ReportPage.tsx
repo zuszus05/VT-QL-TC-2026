@@ -13,6 +13,7 @@ interface ReportPageProps {
   onAttendanceRecordsChange?: (records: AttendanceRecord[]) => void;
   onLoadDailyReport?: (date: string) => void;
   onLoadMonthlyReport?: (monthKey: string) => void;
+  onFinalizeDailyReport?: (date: string) => Promise<boolean>;
   onUpdateMadeUpStatus?: (
     attendanceId: string,
     isMadeUp: boolean
@@ -31,6 +32,7 @@ export function ReportPage({
   onAttendanceRecordsChange,
   onLoadDailyReport,
   onLoadMonthlyReport,
+  onFinalizeDailyReport,
   onUpdateMadeUpStatus,
   madeUpUpdatingIds,
   madeUpError = null,
@@ -87,6 +89,7 @@ export function ReportPage({
             reportError={reportError}
             onAttendanceRecordsChange={onAttendanceRecordsChange}
             onLoadDailyReport={onLoadDailyReport}
+            onFinalizeDailyReport={onFinalizeDailyReport}
             extraStudyRecords={extraStudyRecords}
             students={students}
             classes={classes}

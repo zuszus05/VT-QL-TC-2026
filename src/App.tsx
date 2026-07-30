@@ -262,6 +262,7 @@ function AppContent() {
 
   const activeStartDateRef = useRef<string>("");
   const activeEndDateRef = useRef<string>("");
+  const pendingExtraStudyRecordsRef = useRef<Map<string, ReinforcementScheduleRecord>>(new Map());
   const extraStudyRangeCacheRef = useRef<Map<string, ReinforcementScheduleRecord[]>>(new Map());
   const attendanceExtraStudyCacheRef = useRef<Map<string, ReinforcementScheduleRecord[]>>(new Map());
   const dailyReportCacheRef = useRef<Map<string, AttendanceRecord[]>>(new Map());
@@ -309,7 +310,24 @@ function AppContent() {
       startDate,
       endDate,
       (records) => {
-        setExtraStudyRecords(records);
+        const start = activeStartDateRef.current;
+        const end = activeEndDateRef.current;
+        const pendingRecords = Array.from(
+          pendingExtraStudyRecordsRef.current.values()
+        ).filter((r) => {
+          if (start && end && r.targetDate) {
+            return r.targetDate >= start && r.targetDate <= end;
+          }
+          return true;
+        });
+
+        const mergedRecords = upsertManyById(
+          records,
+          pendingRecords,
+          (record) => record.extraStudyId
+        );
+
+        setExtraStudyRecords(mergedRecords);
         setExtraStudyLoading(false);
         setExtraStudyError(null);
       },
@@ -421,24 +439,49 @@ function AppContent() {
     async (
       inputs: Omit<CreateExtraStudyRecordInput, "createdByUserId" | "updatedByUserId">[]
     ): Promise<ReinforcementScheduleRecord[]> => {
-      if (createExtraStudySubmittingRef.current) {
-        return [];
+      const userId = fbUser?.uid || currentUser?.id;
+      if (!userId) {
+        throw new Error("Người dùng chưa đăng nhập.");
       }
-      createExtraStudySubmittingRef.current = true;
+
+      const fullInputs: CreateExtraStudyRecordInput[] = inputs.map((inp) => ({
+        ...inp,
+        createdByUserId: userId,
+        updatedByUserId: userId,
+      }));
+
+      let preparedForThisCall: ReinforcementScheduleRecord[] = [];
 
       try {
-        const userId = fbUser?.uid || currentUser?.id;
-        if (!userId) {
-          throw new Error("Người dùng chưa đăng nhập.");
-        }
-        const fullInputs: CreateExtraStudyRecordInput[] = inputs.map((inp) => ({
-          ...inp,
-          createdByUserId: userId,
-          updatedByUserId: userId,
-        }));
-        const newRecords = await createExtraStudyRecords(fullInputs);
+        const newRecords = await createExtraStudyRecords(
+          fullInputs,
+          (preparedRecords) => {
+            preparedForThisCall = preparedRecords;
+            const start = activeStartDateRef.current;
+            const end = activeEndDateRef.current;
+
+            for (const rec of preparedRecords) {
+              pendingExtraStudyRecordsRef.current.set(rec.extraStudyId, rec);
+              if (rec.targetDate) {
+                invalidateExtraStudyRangeCacheForDate(rec.targetDate);
+              }
+            }
+
+            const recordsToUpsert = preparedRecords.filter((rec) => {
+              if (start && end && rec.targetDate) {
+                return rec.targetDate >= start && rec.targetDate <= end;
+              }
+              return true;
+            });
+
+            setExtraStudyRecords((prev) =>
+              upsertManyById(prev, recordsToUpsert, (r) => r.extraStudyId)
+            );
+          }
+        );
 
         for (const rec of newRecords) {
+          pendingExtraStudyRecordsRef.current.delete(rec.extraStudyId);
           if (rec.targetDate) {
             invalidateExtraStudyRangeCacheForDate(rec.targetDate);
           }
@@ -446,20 +489,37 @@ function AppContent() {
 
         const start = activeStartDateRef.current;
         const end = activeEndDateRef.current;
-
-        setExtraStudyRecords((prev) => {
-          const recordsToUpsert = newRecords.filter((rec) => {
-            if (start && end && rec.targetDate) {
-              return rec.targetDate >= start && rec.targetDate <= end;
-            }
-            return true;
-          });
-          return upsertManyById(prev, recordsToUpsert, (record) => record.extraStudyId);
+        const recordsToUpsert = newRecords.filter((rec) => {
+          if (start && end && rec.targetDate) {
+            return rec.targetDate >= start && rec.targetDate <= end;
+          }
+          return true;
         });
 
+        setExtraStudyRecords((prev) =>
+          upsertManyById(prev, recordsToUpsert, (r) => r.extraStudyId)
+        );
+
         return newRecords;
-      } finally {
-        createExtraStudySubmittingRef.current = false;
+      } catch (error) {
+        console.error("[App] Lỗi khi tạo extraStudyRecords:", error);
+
+        const createdIds = new Set(
+          preparedForThisCall.map((rec) => rec.extraStudyId)
+        );
+
+        for (const rec of preparedForThisCall) {
+          pendingExtraStudyRecordsRef.current.delete(rec.extraStudyId);
+          if (rec.targetDate) {
+            invalidateExtraStudyRangeCacheForDate(rec.targetDate);
+          }
+        }
+
+        setExtraStudyRecords((prev) =>
+          prev.filter((rec) => !createdIds.has(rec.extraStudyId))
+        );
+
+        throw error;
       }
     },
     [fbUser, currentUser, invalidateExtraStudyRangeCacheForDate]
@@ -648,6 +708,7 @@ function AppContent() {
       monthlyReportCacheRef.current.clear();
       extraStudyRangeCacheRef.current.clear();
       attendanceExtraStudyCacheRef.current.clear();
+      pendingExtraStudyRecordsRef.current.clear();
       setExtraStudyHistoryRecords([]);
       setAttendanceExtraStudyRecords([]);
     }
@@ -1675,6 +1736,203 @@ function AppContent() {
     ]
   );
 
+  // Hàm chốt vắng từ màn hình Báo cáo Hôm nay
+  const handleFinalizeDailyReport = useCallback(
+    async (attendanceDate: string): Promise<boolean> => {
+      const uid = fbUser?.uid;
+      if (!uid) {
+        showToast("Bạn chưa đăng nhập.", "error");
+        return false;
+      }
+
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!attendanceDate || !dateRegex.test(attendanceDate)) {
+        showToast("Ngày báo cáo không hợp lệ.", "error");
+        return false;
+      }
+
+      const unfinalizedAbsentRecords = reportAttendanceRecords.filter(
+        (r) =>
+          r.attendanceDate === attendanceDate &&
+          r.status === "absent" &&
+          r.isFinalized !== true
+      );
+
+      const attendanceIds = Array.from(
+        new Set(
+          unfinalizedAbsentRecords
+            .map((r) =>
+              typeof r.attendanceId === "string" ? r.attendanceId.trim() : ""
+            )
+            .filter((id) => id.length > 0)
+        )
+      );
+
+      if (attendanceIds.length === 0) {
+        showToast("Chưa có bản ghi vắng nào cần chốt.", "info");
+        return true;
+      }
+
+      try {
+        await finalizeAttendanceRecords({
+          attendanceIds,
+          finalizedByUserId: uid,
+        });
+
+        const nowIso = new Date().toISOString();
+
+        setReportAttendanceRecords((prev) =>
+          prev.map((r) => {
+            const trimmedId =
+              typeof r.attendanceId === "string" ? r.attendanceId.trim() : "";
+            if (
+              r.attendanceDate === attendanceDate &&
+              r.status === "absent" &&
+              attendanceIds.includes(trimmedId)
+            ) {
+              return {
+                ...r,
+                isFinalized: true,
+                finalizedAt: nowIso,
+                finalizedByUserId: uid,
+                updatedAt: nowIso,
+                updatedByUserId: uid,
+              };
+            }
+            return r;
+          })
+        );
+
+        if (attendanceDate === getTodayDateStr()) {
+          setTodayAttendanceRecords((prevToday) =>
+            prevToday.map((r) => {
+              const trimmedId =
+                typeof r.attendanceId === "string" ? r.attendanceId.trim() : "";
+              if (
+                r.attendanceDate === attendanceDate &&
+                r.status === "absent" &&
+                attendanceIds.includes(trimmedId)
+              ) {
+                return {
+                  ...r,
+                  isFinalized: true,
+                  finalizedAt: nowIso,
+                  finalizedByUserId: uid,
+                  updatedAt: nowIso,
+                  updatedByUserId: uid,
+                };
+              }
+              return r;
+            })
+          );
+        }
+
+        invalidateReportCachesForDate(attendanceDate);
+        showToast("Đã chốt danh sách vắng.", "success");
+        return true;
+      } catch (error) {
+        console.error("[App] Lỗi khi chốt vắng báo cáo ngày:", error);
+        showToast("Không thể chốt vắng. Vui lòng thử lại.", "error");
+        return false;
+      }
+    },
+    [
+      fbUser,
+      reportAttendanceRecords,
+      getTodayDateStr,
+      invalidateReportCachesForDate,
+      showToast,
+    ]
+  );
+
+  const hasAutoFinalizedTodayRef = useRef<boolean>(false);
+
+  // Tự động chốt vắng ngày hôm nay sau 23:00 cho các bản ghi chưa chốt
+  useEffect(() => {
+    const userId = fbUser?.uid || currentUser?.id;
+    if (!currentUser || !userId) return;
+
+    const now = new Date();
+    if (now.getHours() >= 23) {
+      const todayStr = getTodayDateStr();
+      if (hasAutoFinalizedTodayRef.current === todayStr) return;
+
+      const unfinalizedAbsent = todayAttendanceRecords.filter(
+        (r) =>
+          r.attendanceDate === todayStr &&
+          r.status === "absent" &&
+          r.isFinalized !== true
+      );
+
+      if (unfinalizedAbsent.length > 0) {
+        hasAutoFinalizedTodayRef.current = todayStr;
+        const ids = unfinalizedAbsent
+          .map((r) =>
+            typeof r.attendanceId === "string" ? r.attendanceId.trim() : ""
+          )
+          .filter(Boolean);
+
+        if (ids.length > 0) {
+          finalizeAttendanceRecords({
+            attendanceIds: ids,
+            finalizedByUserId: "SYSTEM_AUTO_2300",
+          })
+            .then(() => {
+              const nowIso = new Date().toISOString();
+              setTodayAttendanceRecords((prev) =>
+                prev.map((r) => {
+                  const rId =
+                    typeof r.attendanceId === "string"
+                      ? r.attendanceId.trim()
+                      : "";
+                  if (ids.includes(rId)) {
+                    return {
+                      ...r,
+                      isFinalized: true,
+                      finalizedAt: nowIso,
+                      finalizedByUserId: "SYSTEM_AUTO_2300",
+                      updatedAt: nowIso,
+                      updatedByUserId: "SYSTEM_AUTO_2300",
+                    };
+                  }
+                  return r;
+                })
+              );
+              setReportAttendanceRecords((prev) =>
+                prev.map((r) => {
+                  const rId =
+                    typeof r.attendanceId === "string"
+                      ? r.attendanceId.trim()
+                      : "";
+                  if (ids.includes(rId)) {
+                    return {
+                      ...r,
+                      isFinalized: true,
+                      finalizedAt: nowIso,
+                      finalizedByUserId: "SYSTEM_AUTO_2300",
+                      updatedAt: nowIso,
+                      updatedByUserId: "SYSTEM_AUTO_2300",
+                    };
+                  }
+                  return r;
+                })
+              );
+              invalidateReportCachesForDate(todayStr);
+            })
+            .catch((err) => {
+              console.error("[App] Lỗi auto finalize lúc 23:00:", err);
+            });
+        }
+      }
+    }
+  }, [
+    currentUser,
+    fbUser,
+    todayAttendanceRecords,
+    getTodayDateStr,
+    invalidateReportCachesForDate,
+  ]);
+
   // Hàm đánh dấu muộn cho 1 học sinh đã được chốt vắng (isFinalized === true && status === 'present')
   const handleMarkAttendanceLate = useCallback(
     async (attendanceId: string): Promise<boolean> => {
@@ -2033,6 +2291,7 @@ function AppContent() {
       case "students":
         return (
           <StudentsPage
+            currentUser={currentUser}
             students={students}
             studentsLoading={studentsLoading}
             studentsError={studentsError}
@@ -2101,6 +2360,7 @@ function AppContent() {
             onAttendanceRecordsChange={handleSetReportAttendanceRecords}
             onLoadDailyReport={handleLoadDailyReport}
             onLoadMonthlyReport={handleLoadMonthlyReport}
+            onFinalizeDailyReport={handleFinalizeDailyReport}
             onUpdateMadeUpStatus={handleUpdateAttendanceMadeUpStatus}
             madeUpUpdatingIds={reportMadeUpUpdatingIds}
             madeUpError={reportMadeUpError}
@@ -2122,6 +2382,7 @@ function AppContent() {
       default:
         return (
           <StudentsPage
+            currentUser={currentUser}
             students={students}
             studentsLoading={studentsLoading}
             studentsError={studentsError}

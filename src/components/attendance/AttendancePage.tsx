@@ -515,7 +515,7 @@ export function AttendancePage({
 };
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-4 md:space-y-6 pb-6 md:pb-0">
       {/* Đầu trang */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Điểm danh</h1>
@@ -710,26 +710,11 @@ export function AttendancePage({
               />
 
               {filteredRecords.length > 0 && (
-                <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                  <Button
-                    variant="secondary"
-                    onClick={handleFinalizeAttendance}
-                    disabled={
-                      attendanceLoading ||
-                      attendanceSaving ||
-                      attendanceFinalizing ||
-                      attendanceMarkingLate ||
-                      allFinalized
-                    }
-                  >
-                    {attendanceFinalizing
-                      ? "Đang chốt..."
-                      : allFinalized
-                      ? "Đã chốt"
-                      : "Chốt vắng"}
-                  </Button>
+                <div className="pt-4 flex justify-center border-t border-slate-100">
                   <Button
                     variant="primary"
+                    size="lg"
+                    className="w-full sm:w-auto sm:min-w-[240px]"
                     onClick={handleSaveAttendance}
                     disabled={
                       attendanceLoading ||
