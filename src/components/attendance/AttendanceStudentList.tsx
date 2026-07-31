@@ -126,10 +126,6 @@ export function AttendanceStudentList({
     <div className="space-y-6">
       {groupedByGrade.map((group) => {
         const getEffectiveStatus = (extraStudyId: string): AttendanceStatus => {
-          const attRec = attendanceRecordMap?.[extraStudyId];
-          if (attRec) {
-            return attRec.status;
-          }
           return attendanceMap[extraStudyId] || "present";
         };
 
@@ -183,9 +179,7 @@ export function AttendanceStudentList({
               {group.items.map(({ rec, student, className, shortName }) => {
                 const attRecord = attendanceRecordMap?.[rec.extraStudyId];
                 const attRecordId = attRecord?.attendanceId;
-                const currentStatus = attRecord
-                  ? attRecord.status
-                  : (attendanceMap[rec.extraStudyId] || "present");
+                const currentStatus = attendanceMap[rec.extraStudyId] || "present";
                 const note = notesMap[rec.extraStudyId] || "";
                 const hasNote = note.trim().length > 0;
                 const isFinalized = finalizedSet?.has(rec.extraStudyId) ?? false;
