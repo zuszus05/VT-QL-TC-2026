@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { GradeLevel, SchoolClass } from "../../types/academic";
 import { Student } from "../../types/student";
 import { GRADE_LEVELS } from "../../constants/academic";
@@ -11,9 +11,13 @@ import { parseStudentExcelFile, ExcelFilePreviewData } from "../../utils/excelRe
 import { validateExcelImportData, ExcelValidationResult } from "../../utils/excelValidator";
 import { StudentImportResult } from "../../services/studentImportService";
 import { upsertById, upsertManyById, removeById } from "../../utils/stateHelpers";
+import { filterAndSortStudents } from "../../utils/studentSorting";
 import { StudentsHeader } from "./StudentsHeader";
 import { StudentStats } from "./StudentStats";
 import { StudentFilters } from "./StudentFilters";
+import { StudentTable } from "./StudentTable";
+import { StudentCardList } from "./StudentCardList";
+import { StudentDeleteModal } from "./StudentDeleteModal";
 import { ClassSection } from "../classes/ClassSection";
 import { ClassDetailView } from "../classes/ClassDetailView";
 import { ClassFormModal } from "../classes/ClassFormModal";
@@ -61,6 +65,8 @@ export function StudentsPage({
 
   // Modals state
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState<boolean>(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
   const [isClassFormOpen, setIsClassFormOpen] = useState<boolean>(false);
   const [editingClass, setEditingClass] = useState<SchoolClass | null>(null);
   const [deletingClass, setDeletingClass] = useState<SchoolClass | null>(null);
@@ -253,7 +259,23 @@ export function StudentsPage({
   };
 
   const handleAddStudent = () => {
+    setEditingStudent(null);
     setIsAddStudentModalOpen(true);
+  };
+
+  const handleEditStudentFromSearch = (studentId: string) => {
+    const st = students.find((s) => s.studentId === studentId);
+    if (st) {
+      setEditingStudent(st);
+      setIsAddStudentModalOpen(true);
+    }
+  };
+
+  const handleDeleteStudentFromSearch = (studentId: string) => {
+    const st = students.find((s) => s.studentId === studentId);
+    if (st) {
+      setDeletingStudent(st);
+    }
   };
 
   const handleAddClass = () => {
@@ -398,6 +420,48 @@ export function StudentsPage({
   }
 
   // Chế độ Danh sách lớp bình thường
+  const isSearchActive = searchTerm.trim() !== "";
+
+  const filteredStudents = useMemo(() => {
+    if (!isSearchActive) return [];
+    return filterAndSortStudents(
+      students,
+      selectedGrade,
+      selectedClassId,
+      searchTerm,
+      "candidate-asc",
+      classes
+    );
+  }, [students, selectedGrade, selectedClassId, searchTerm, isSearchActive, classes]);
+
+  const matchedClassGroups = useMemo(() => {
+    if (!isSearchActive || filteredStudents.length === 0) return [];
+
+    const groupsMap = new Map<string, { cls?: SchoolClass; students: Student[] }>();
+
+    for (const student of filteredStudents) {
+      const classId = student.classId || "unknown";
+      if (!groupsMap.has(classId)) {
+        const cls = classes.find((c) => c.classId === classId);
+        groupsMap.set(classId, { cls, students: [] });
+      }
+      groupsMap.get(classId)!.students.push(student);
+    }
+
+    const groupList = Array.from(groupsMap.values());
+
+    groupList.sort((a, b) => {
+      const gradeA = a.cls?.grade ?? 999;
+      const gradeB = b.cls?.grade ?? 999;
+      if (gradeA !== gradeB) return gradeA - gradeB;
+      const nameA = a.cls?.className || "";
+      const nameB = b.cls?.className || "";
+      return nameA.localeCompare(nameB, "vi", { numeric: true });
+    });
+
+    return groupList;
+  }, [isSearchActive, filteredStudents, classes]);
+
   const gradesToDisplay: GradeLevel[] =
     selectedGrade === "all" ? [...GRADE_LEVELS] : [selectedGrade];
 
@@ -474,7 +538,7 @@ export function StudentsPage({
       <div className="space-y-6 pt-2">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-            Danh sách lớp
+            {isSearchActive ? "Kết quả tìm kiếm" : "Danh sách lớp"}
           </h2>
         </div>
 
@@ -508,6 +572,77 @@ export function StudentsPage({
               description="Vui lòng kiểm tra kết nối và quyền truy cập Firestore."
             />
           </div>
+        ) : isSearchActive ? (
+          filteredStudents.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200/90 p-8 text-center">
+              <EmptyState
+                title="Không tìm thấy học sinh phù hợp."
+                description="Thử thay đổi từ khóa tìm kiếm hoặc kiểm tra lại bộ lọc."
+              />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {matchedClassGroups.map(({ cls, students: classMatchedStudents }) => {
+                const classId = cls?.classId || "unknown";
+                const classNameDisplay = cls
+                  ? cls.className.startsWith("Lớp")
+                    ? cls.className
+                    : `Lớp ${cls.className}`
+                  : "Chưa xác định lớp";
+
+                return (
+                  <div
+                    key={classId}
+                    className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200/90 shadow-xs space-y-4"
+                  >
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                        <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                          {classNameDisplay}
+                        </h3>
+                        <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
+                          {classMatchedStudents.length} học sinh phù hợp
+                        </span>
+                      </div>
+                      {cls && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleViewStudents(cls.grade, cls.classId)}
+                          className="text-xs font-semibold text-teal-700 hover:bg-teal-50 min-h-[36px]"
+                        >
+                          Xem toàn bộ lớp
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Desktop Table */}
+                    <div className="hidden md:block">
+                      <StudentTable
+                        students={classMatchedStudents}
+                        classes={classes}
+                        hideClassColumn
+                        onEditStudent={handleEditStudentFromSearch}
+                        onDeleteStudent={handleDeleteStudentFromSearch}
+                      />
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="block md:hidden">
+                      <StudentCardList
+                        students={classMatchedStudents}
+                        classes={classes}
+                        hideClassColumn
+                        onEditStudent={handleEditStudentFromSearch}
+                        onDeleteStudent={handleDeleteStudentFromSearch}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
         ) : classes.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <EmptyState
@@ -574,13 +709,37 @@ export function StudentsPage({
         onConfirmDelete={handleConfirmDeleteClass}
       />
 
-      {/* Modal Thêm học sinh từ ngoài danh sách lớp */}
+      {/* Modal Thêm/Sửa học sinh */}
       <StudentFormModal
         open={isAddStudentModalOpen}
-        onClose={() => setIsAddStudentModalOpen(false)}
+        onClose={() => {
+          setIsAddStudentModalOpen(false);
+          setEditingStudent(null);
+        }}
         allStudents={students}
         allClasses={classes}
-        onSave={handleSaveStudent}
+        student={editingStudent}
+        onSave={(data) => {
+          handleSaveStudent(data);
+          setEditingStudent(null);
+          setIsAddStudentModalOpen(false);
+        }}
+      />
+
+      {/* Modal Xóa Học Sinh */}
+      <StudentDeleteModal
+        open={Boolean(deletingStudent)}
+        student={deletingStudent}
+        classNameDisplay={
+          deletingStudent
+            ? classes.find((c) => c.classId === deletingStudent.classId)?.className
+            : undefined
+        }
+        onClose={() => setDeletingStudent(null)}
+        onConfirmDelete={async (studentId) => {
+          await handleDeleteStudent(studentId);
+          setDeletingStudent(null);
+        }}
       />
 
       {/* Modal Xem trước dữ liệu tệp Excel */}

@@ -79,19 +79,27 @@ export function Dashboard({
         return null;
       }
       const student = students.find((s) => s.studentId === record.studentId);
-      if (!student) return null;
-      const schoolClass = classes.find((c) => c.classId === student.classId);
-      const className = schoolClass?.className || "—";
+      const schoolClass = student
+        ? classes.find((c) => c.classId === student.classId)
+        : null;
+
+      const rawClassName = schoolClass?.className;
+      const className = schoolClass && rawClassName
+        ? rawClassName.startsWith("Lớp")
+          ? rawClassName
+          : `Lớp ${rawClassName}`
+        : "Chưa xác định lớp";
 
       const sessionTime =
         SESSION_TIME_RANGES[record.session] || "07:00 – 11:30";
 
       return {
         extraStudyId: record.extraStudyId,
-        studentId: student.studentId,
-        candidateNumber: student.candidateNumber,
-        fullName: student.fullName,
-        grade: student.grade,
+        studentId: record.studentId,
+        candidateNumber: student?.candidateNumber || 0,
+        fullName: student?.fullName || "Chưa xác định",
+        grade: schoolClass ? (schoolClass.grade ?? student?.grade ?? 999) : 999,
+        classId: schoolClass ? schoolClass.classId : "unknown",
         className,
         session: record.session,
         sessionTime,

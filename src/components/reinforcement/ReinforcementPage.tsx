@@ -73,6 +73,87 @@ function getShortName(fullName: string): string {
   return parts[parts.length - 1] || fullName;
 }
 
+interface ClassGroup {
+  classKey: string;
+  className: string;
+  grade: number;
+  isUnknown: boolean;
+  records: {
+    rec: ReinforcementScheduleRecord;
+    student: Student | undefined;
+  }[];
+}
+
+function groupRecordsByClass(
+  records: ReinforcementScheduleRecord[],
+  students: Student[],
+  classes: SchoolClass[]
+): ClassGroup[] {
+  const groupsMap = new Map<string, ClassGroup>();
+
+  for (const rec of records) {
+    const student = students.find((s) => s.studentId === rec.studentId);
+    const schoolClass = student
+      ? classes.find((c) => c.classId === student.classId)
+      : undefined;
+
+    let classKey: string;
+    let className: string;
+    let grade: number;
+    let isUnknown = false;
+
+    if (schoolClass) {
+      classKey = schoolClass.classId;
+      className = schoolClass.className;
+      grade = schoolClass.grade ?? student?.grade ?? 999;
+    } else {
+      classKey = "unknown";
+      className = "Chưa xác định lớp";
+      grade = 999;
+      isUnknown = true;
+    }
+
+    if (!groupsMap.has(classKey)) {
+      groupsMap.set(classKey, {
+        classKey,
+        className,
+        grade,
+        isUnknown,
+        records: [],
+      });
+    }
+
+    groupsMap.get(classKey)!.records.push({ rec, student });
+  }
+
+  const groupList = Array.from(groupsMap.values());
+
+  // Sắp xếp nhóm lớp:
+  // - Lớp hợp lệ trước, Chưa xác định lớp sau cùng
+  // - Khối tăng dần (6 -> 7 -> 8 -> 9)
+  // - Tên lớp tăng dần (6A -> 6B)
+  groupList.sort((a, b) => {
+    if (a.isUnknown !== b.isUnknown) {
+      return a.isUnknown ? 1 : -1;
+    }
+    if (a.grade !== b.grade) {
+      return a.grade - b.grade;
+    }
+    return a.className.localeCompare(b.className, "vi", { numeric: true });
+  });
+
+  // Trong từng lớp, sắp xếp học sinh theo SBD tăng dần
+  for (const group of groupList) {
+    group.records.sort((a, b) => {
+      const sbdA = a.student?.candidateNumber ?? 999999;
+      const sbdB = b.student?.candidateNumber ?? 999999;
+      return sbdA - sbdB;
+    });
+  }
+
+  return groupList;
+}
+
 interface ReinforcementPageProps {
   records: ReinforcementScheduleRecord[];
   historyRecords?: ReinforcementScheduleRecord[];
@@ -129,6 +210,21 @@ export function ReinforcementPage({
 
   // State active tab for Area 2
   const [activeDayTab, setActiveDayTab] = useState<string>(getTodayDayName);
+
+  // State quản lý accordion đóng/mở lớp trong các ca
+  const [openClassKeys, setOpenClassKeys] = useState<Set<string>>(new Set());
+
+  const toggleClassAccordion = (accordionKey: string) => {
+    setOpenClassKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(accordionKey)) {
+        next.delete(accordionKey);
+      } else {
+        next.add(accordionKey);
+      }
+      return next;
+    });
+  };
 
   // State chế độ xem (lịch hiện tại / lịch sử) & bộ lọc lịch sử
   const [viewMode, setViewMode] = useState<"active" | "history">("active");
@@ -814,6 +910,11 @@ export function ReinforcementPage({
                   const shiftRecords = currentTabRecords.filter(
                     (r) => r.session === shiftCode
                   );
+                  const classGroups = groupRecordsByClass(
+                    shiftRecords,
+                    students,
+                    classes
+                  );
 
                   return (
                     <div
@@ -837,68 +938,122 @@ export function ReinforcementPage({
                           />
                         </div>
                       ) : (
-                        <div className="space-y-2.5">
-                          {shiftRecords.map((rec) => {
-                            const student = students.find(
-                              (s) => s.studentId === rec.studentId
-                            );
-                            if (!student) return null;
-
-                            const schoolClass = classes.find(
-                              (c) => c.classId === student.classId
-                            );
-                            const className = schoolClass?.className || "—";
-                            const shortName = getShortName(student.fullName);
-                            const subjectLabel =
-                              EXTRA_SUBJECT_LABELS[rec.subject] || rec.subject;
-                            const typeLabel =
-                              STUDY_TYPE_LABELS[rec.type] || rec.type;
+                        <div className="space-y-2">
+                          {classGroups.map((group) => {
+                            const accordionKey = `${activeTargetDate}-${shiftCode}-${group.classKey}`;
+                            const isOpen = openClassKeys.has(accordionKey);
+                            const displayClassName = group.isUnknown
+                              ? "Chưa xác định lớp"
+                              : group.className.startsWith("Lớp")
+                              ? group.className
+                              : `Lớp ${group.className}`;
 
                             return (
                               <div
-                                key={rec.extraStudyId}
-                                className="bg-white rounded-lg border border-slate-200/90 p-3 shadow-2xs space-y-1"
+                                key={group.classKey}
+                                className="rounded-lg border border-slate-200/90 bg-white overflow-hidden shadow-2xs"
                               >
-                                <div className="flex items-center justify-between text-xs font-semibold">
-                                  <span className="text-slate-700 font-bold">
-                                    {className}
-                                  </span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span
-                                      className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                                        rec.type === "extra-study"
-                                          ? "bg-amber-100/80 text-amber-900 border border-amber-200/60"
-                                          : "bg-purple-100/80 text-purple-900 border border-purple-200/60"
-                                      }`}
-                                    >
-                                      {typeLabel}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleClassAccordion(accordionKey)
+                                  }
+                                  className="w-full px-3 py-2.5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer select-none"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-500 font-bold text-xs">
+                                      {isOpen ? "▾" : "▸"}
                                     </span>
-                                    <button
-                                      type="button"
-                                      aria-label={`Chuyển lịch học sinh SBD ${student.candidateNumber}`}
-                                      onClick={() => setRecordToMove(rec)}
-                                      className="text-slate-500 hover:text-sky-600 hover:bg-sky-50 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer border border-slate-200/80"
-                                      title="Chuyển lịch"
-                                    >
-                                      Chuyển
-                                    </button>
-                                    <button
-                                      type="button"
-                                      aria-label={`Xóa học sinh SBD ${student.candidateNumber} khỏi ca`}
-                                      onClick={() => setRecordToDelete(rec)}
-                                      className="text-slate-400 hover:text-rose-600 p-0.5 rounded hover:bg-rose-50 transition-colors cursor-pointer text-xs font-bold leading-none ml-0.5"
-                                      title="Xóa khỏi ca"
-                                    >
-                                      ✕
-                                    </button>
+                                    <span className="text-xs font-bold text-slate-800">
+                                      {displayClassName}
+                                    </span>
                                   </div>
-                                </div>
-                                <div className="text-sm font-bold text-slate-900">
-                                  {student.candidateNumber} — {shortName}
-                                </div>
-                                <div className="text-xs font-medium text-slate-500">
-                                  {subjectLabel}
-                                </div>
+                                  <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                                    {group.records.length} HS
+                                  </span>
+                                </button>
+
+                                {isOpen && (
+                                  <div className="p-2.5 pt-1.5 space-y-2 border-t border-slate-100 bg-slate-50/40">
+                                    {group.records.map(({ rec, student }) => {
+                                      const schoolClass = student
+                                        ? classes.find(
+                                            (c) => c.classId === student.classId
+                                          )
+                                        : null;
+                                      const rawClassName =
+                                        schoolClass?.className || "—";
+                                      const cardClassTag = group.isUnknown
+                                        ? "Chưa xác định lớp"
+                                        : rawClassName.startsWith("Lớp")
+                                        ? rawClassName
+                                        : `Lớp ${rawClassName}`;
+                                      const shortName = student
+                                        ? getShortName(student.fullName)
+                                        : "Không tìm thấy học sinh";
+                                      const candidateNum = student
+                                        ? student.candidateNumber
+                                        : "—";
+                                      const subjectLabel =
+                                        EXTRA_SUBJECT_LABELS[rec.subject] ||
+                                        rec.subject;
+                                      const typeLabel =
+                                        STUDY_TYPE_LABELS[rec.type] || rec.type;
+
+                                      return (
+                                        <div
+                                          key={rec.extraStudyId}
+                                          className="bg-white rounded-lg border border-slate-200/90 p-2.5 shadow-2xs space-y-1"
+                                        >
+                                          <div className="flex items-center justify-between text-xs font-semibold">
+                                            <span className="text-slate-700 font-bold">
+                                              {cardClassTag}
+                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                              <span
+                                                className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                                                  rec.type === "extra-study"
+                                                    ? "bg-amber-100/80 text-amber-900 border border-amber-200/60"
+                                                    : "bg-purple-100/80 text-purple-900 border border-purple-200/60"
+                                                }`}
+                                              >
+                                                {typeLabel}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                aria-label={`Chuyển lịch học sinh SBD ${candidateNum}`}
+                                                onClick={() =>
+                                                  setRecordToMove(rec)
+                                                }
+                                                className="text-slate-500 hover:text-sky-600 hover:bg-sky-50 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer border border-slate-200/80"
+                                                title="Chuyển lịch"
+                                              >
+                                                Chuyển
+                                              </button>
+                                              <button
+                                                type="button"
+                                                aria-label={`Xóa học sinh SBD ${candidateNum} khỏi ca`}
+                                                onClick={() =>
+                                                  setRecordToDelete(rec)
+                                                }
+                                                className="text-slate-400 hover:text-rose-600 p-0.5 rounded hover:bg-rose-50 transition-colors cursor-pointer text-xs font-bold leading-none ml-0.5"
+                                                title="Xóa khỏi ca"
+                                              >
+                                                ✕
+                                              </button>
+                                            </div>
+                                          </div>
+                                          <div className="text-sm font-bold text-slate-900">
+                                            {candidateNum} — {shortName}
+                                          </div>
+                                          <div className="text-xs font-medium text-slate-500">
+                                            {subjectLabel}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

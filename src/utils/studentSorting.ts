@@ -1,5 +1,5 @@
 import { Student } from "../types/student";
-import { GradeLevel } from "../types/academic";
+import { GradeLevel, SchoolClass } from "../types/academic";
 
 export type StudentSortOption =
   | "candidate-asc"
@@ -7,12 +7,36 @@ export type StudentSortOption =
   | "name-asc"
   | "name-desc";
 
-function removeVietnameseTones(str: string): string {
-  return str
+export function normalizeSearchText(value: string): string {
+  if (!value) return "";
+  return value
+    .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/đ/g, "d")
-    .replace(/Đ/g, "d");
+    .replace(/Đ/g, "d")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function matchStudentTokens(
+  student: Student,
+  searchTerm: string,
+  className?: string
+): boolean {
+  const normTerm = normalizeSearchText(searchTerm);
+  if (!normTerm) return true;
+
+  const tokens = normTerm.split(" ").filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const candidateStr = student.candidateNumber.toString();
+  const nameNorm = normalizeSearchText(student.fullName);
+  const classNorm = className ? normalizeSearchText(className) : "";
+
+  const searchableText = `${candidateStr} ${nameNorm} ${classNorm}`;
+
+  return tokens.every((token) => searchableText.includes(token));
 }
 
 export function filterAndSortStudents(
@@ -20,11 +44,14 @@ export function filterAndSortStudents(
   selectedGrade: GradeLevel | "all",
   selectedClassId: string | "all",
   searchTerm: string,
-  sortOption: StudentSortOption
+  sortOption: StudentSortOption,
+  classes?: SchoolClass[]
 ): Student[] {
   // 1. Filtering
-  const rawTerm = searchTerm.trim().toLowerCase().replace(/\s+/g, " ");
-  const cleanTerm = removeVietnameseTones(rawTerm);
+  const classMap = new Map<string, string>();
+  if (classes) {
+    classes.forEach((c) => classMap.set(c.classId, c.className));
+  }
 
   const filtered = students.filter((student) => {
     // Filter by grade
@@ -37,16 +64,10 @@ export function filterAndSortStudents(
       return false;
     }
 
-    // Filter by searchTerm
-    if (cleanTerm) {
-      const rawName = student.fullName.toLowerCase().replace(/\s+/g, " ");
-      const nameClean = removeVietnameseTones(rawName);
-      const candStr = student.candidateNumber.toString();
-
-      const matchesName = nameClean.includes(cleanTerm);
-      const matchesCand = candStr.includes(rawTerm);
-
-      if (!matchesName && !matchesCand) {
+    // Filter by searchTerm with token search
+    if (searchTerm.trim() !== "") {
+      const clsName = classMap.get(student.classId) || "";
+      if (!matchStudentTokens(student, searchTerm, clsName)) {
         return false;
       }
     }

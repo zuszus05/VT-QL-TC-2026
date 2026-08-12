@@ -1845,7 +1845,7 @@ function AppContent() {
     ]
   );
 
-  const hasAutoFinalizedTodayRef = useRef<boolean>(false);
+  const hasAutoFinalizedTodayRef = useRef<string>("");
 
   // Tự động chốt vắng ngày hôm nay sau 23:00 cho các bản ghi chưa chốt
   useEffect(() => {

@@ -8,7 +8,8 @@ export interface TodayStudentSchedule {
   studentId: string;
   candidateNumber: number; // SBD kiểu number
   fullName: string;
-  grade: GradeLevel;
+  grade: GradeLevel | number;
+  classId?: string;
   className: string;
   subject?: ExtraSubject;
   session: StudySession;
