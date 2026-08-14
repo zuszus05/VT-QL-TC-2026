@@ -59,7 +59,6 @@ export function StudentFormModal({
   }>({});
 
   const isEditMode = Boolean(student);
-  const isClassFixed = Boolean(presetClassId);
   const title = isEditMode ? "Sửa học sinh" : "Thêm học sinh";
 
   // When modal opens or editing student/presets change, fill/reset form
@@ -125,7 +124,11 @@ export function StudentFormModal({
   };
 
   const availableClasses = selectedGrade
-    ? allClasses.filter((c) => c.grade === Number(selectedGrade))
+    ? [...allClasses]
+        .filter((c) => c.grade === Number(selectedGrade))
+        .sort((a, b) =>
+          a.className.localeCompare(b.className, "vi", { numeric: true })
+        )
     : [];
 
   const validate = (): boolean => {
@@ -236,12 +239,9 @@ export function StudentFormModal({
             <select
               id="student-grade-select"
               value={selectedGrade}
-              disabled={isClassFixed}
               onChange={(e) => handleGradeChange(e.target.value)}
               className={`w-full px-3 py-2 text-sm rounded-lg border ${
-                isClassFixed
-                  ? "bg-slate-100 text-slate-600 font-semibold border-slate-200 cursor-not-allowed"
-                  : errors.grade
+                errors.grade
                   ? "bg-white text-slate-900 border-rose-500 focus:ring-rose-500"
                   : "bg-white text-slate-900 border-slate-300 focus:ring-teal-500 focus:border-teal-500"
               } focus:outline-none focus:ring-2 transition-colors`}
@@ -270,7 +270,7 @@ export function StudentFormModal({
             <select
               id="student-class-select"
               value={selectedClassId}
-              disabled={isClassFixed || !selectedGrade}
+              disabled={!selectedGrade}
               onChange={(e) => {
                 setSelectedClassId(e.target.value);
                 if (errors.classId) {
@@ -278,7 +278,7 @@ export function StudentFormModal({
                 }
               }}
               className={`w-full px-3 py-2 text-sm rounded-lg border ${
-                isClassFixed || !selectedGrade
+                !selectedGrade
                   ? "bg-slate-100 text-slate-600 font-semibold border-slate-200 cursor-not-allowed"
                   : errors.classId
                   ? "bg-white text-slate-900 border-rose-500 focus:ring-rose-500"

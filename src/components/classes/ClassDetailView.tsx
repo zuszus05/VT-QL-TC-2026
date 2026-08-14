@@ -62,11 +62,7 @@ export function ClassDetailView({
   };
 
   const handleSaveStudent = (formData: StudentFormData) => {
-    onSaveStudent({
-      ...formData,
-      grade: schoolClass.grade,
-      classId: schoolClass.classId,
-    });
+    onSaveStudent(formData);
   };
 
   // Lọc và sắp xếp chỉ trong lớp này

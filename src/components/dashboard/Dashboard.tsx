@@ -93,7 +93,7 @@ export function Dashboard({
       const sessionTime =
         SESSION_TIME_RANGES[record.session] || "07:00 – 11:30";
 
-      return {
+      const result: TodayStudentSchedule = {
         extraStudyId: record.extraStudyId,
         studentId: record.studentId,
         candidateNumber: student?.candidateNumber || 0,
@@ -104,6 +104,7 @@ export function Dashboard({
         session: record.session,
         sessionTime,
       };
+      return result;
     })
     .filter((item): item is TodayStudentSchedule => item !== null);
 

@@ -17,6 +17,45 @@ function getShortName(fullName: string): string {
   return parts[parts.length - 1] || fullName;
 }
 
+function getStudyTypeBadgeLabel(type?: string): string {
+  if (!type) return "—";
+  const normalized = type.toLowerCase().trim();
+  if (
+    normalized === "extra-study" ||
+    normalized === "reinforcement" ||
+    normalized === "tăng cường"
+  ) {
+    return "Tăng cường";
+  }
+  if (
+    normalized === "make-up" ||
+    normalized === "makeup" ||
+    normalized === "học bù"
+  ) {
+    return "Học bù";
+  }
+  return type;
+}
+
+function getSubjectBadgeLabel(subject?: string): string {
+  if (!subject) return "—";
+  const map: Record<string, string> = {
+    algebra: "Toán Đại",
+    geometry: "Toán Hình",
+    science: "KHTN",
+    "practice-test": "Luyện đề",
+  };
+  const normalized = subject.toLowerCase().trim();
+  if (map[normalized]) {
+    return map[normalized];
+  }
+  if (normalized === "toán đại") return "Toán Đại";
+  if (normalized === "toán hình") return "Toán Hình";
+  if (normalized === "khtn") return "KHTN";
+  if (normalized === "luyện đề" || normalized === "luyện de") return "Luyện đề";
+  return subject;
+}
+
 type StatusFilter = "all" | "absent" | "late";
 
 const sessionOrder: StudySession[] = ["morning", "afternoon", "evening"];
@@ -141,9 +180,16 @@ export function TodayReportSection({
   // Thống kê theo từng ca (Morning, Afternoon, Evening) cho selectedDate
   const sessionStats = sessionOrder.map((session) => {
     const sessionRecords = dateProblemRecords.filter((att) => {
-      const extraStudy = extraStudyRecords.find(
-        (e) => e.extraStudyId === att.extraStudyId
-      );
+      const extraStudy = extraStudyRecords.find((e) => {
+        if (att.extraStudyId && e.extraStudyId === att.extraStudyId) {
+          return true;
+        }
+        return (
+          e.studentId === att.studentId &&
+          e.targetDate === att.attendanceDate &&
+          e.session === att.session
+        );
+      });
       const recSession: StudySession =
         extraStudy?.session || att.session || "morning";
       return recSession === session;
@@ -182,9 +228,16 @@ export function TodayReportSection({
 
   // Enrich data cho từng bản ghi đã lọc
   const enrichedItems = filteredProblemRecords.map((att) => {
-    const extraStudy = extraStudyRecords.find(
-      (e) => e.extraStudyId === att.extraStudyId
-    );
+    const extraStudy = extraStudyRecords.find((e) => {
+      if (att.extraStudyId && e.extraStudyId === att.extraStudyId) {
+        return true;
+      }
+      return (
+        e.studentId === att.studentId &&
+        e.targetDate === att.attendanceDate &&
+        e.session === att.session
+      );
+    });
     const student = students.find((s) => s.studentId === att.studentId);
     const classObj = classes.find((c) => c.classId === student?.classId);
 
@@ -553,8 +606,18 @@ export function TodayReportSection({
 
                         <div className="space-y-2">
                           {gradeGroup.items.map(
-                            ({ att, student, className }) => {
+                            ({ att, student, className, extraStudy }) => {
                               const isAbsent = att.status === "absent";
+                              const typeLabel = getStudyTypeBadgeLabel(
+                                extraStudy?.type
+                              );
+                              const subjectLabel = getSubjectBadgeLabel(
+                                extraStudy?.subject
+                              );
+                              const typeBadgeText =
+                                typeLabel === "—" ? "Loại hình: —" : typeLabel;
+                              const subjectBadgeText =
+                                subjectLabel === "—" ? "Môn: —" : subjectLabel;
 
                               return (
                                 <div
@@ -562,7 +625,7 @@ export function TodayReportSection({
                                   className="p-3.5 bg-white rounded-xl border border-slate-200/90 shadow-2xs space-y-2.5"
                                 >
                                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                                    <div className="flex items-center gap-2.5">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       <span className="inline-flex items-center justify-center font-bold text-xs text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200/60">
                                         {className}
                                       </span>
@@ -572,6 +635,30 @@ export function TodayReportSection({
                                           ? getShortName(student.fullName)
                                           : "Chưa xác định"}
                                       </span>
+
+                                      {/* Badge Loại hình & Môn */}
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span
+                                          className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                                            typeLabel === "Tăng cường"
+                                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                              : typeLabel === "Học bù"
+                                              ? "bg-purple-50 text-purple-700 border-purple-200"
+                                              : "bg-slate-100 text-slate-500 border-slate-200"
+                                          }`}
+                                        >
+                                          {typeBadgeText}
+                                        </span>
+                                        <span
+                                          className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md border ${
+                                            subjectLabel !== "—"
+                                              ? "bg-slate-100 text-slate-800 border-slate-300/80 font-medium"
+                                              : "bg-slate-100 text-slate-500 border-slate-200"
+                                          }`}
+                                        >
+                                          {subjectBadgeText}
+                                        </span>
+                                      </div>
                                     </div>
 
                                     {/* Nút thao tác: Vắng, Muộn, Ghi chú */}

@@ -110,6 +110,19 @@ export function MonthlyReportSection({
   const [selectedGrade, setSelectedGrade] = useState<string>("all");
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [openClassIds, setOpenClassIds] = useState<Set<string>>(new Set());
+
+  const toggleClassAccordion = (classKey: string) => {
+    setOpenClassIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(classKey)) {
+        next.delete(classKey);
+      } else {
+        next.add(classKey);
+      }
+      return next;
+    });
+  };
 
   const handleGradeChange = (newGrade: string) => {
     setSelectedGrade(newGrade);
@@ -122,7 +135,7 @@ export function MonthlyReportSection({
   });
 
   const sortedAvailableClasses = [...availableClasses].sort((a, b) =>
-    a.className.localeCompare(b.className)
+    a.className.localeCompare(b.className, "vi", { numeric: true })
   );
 
   // Group raw absent attendanceRecords by studentId and sort
@@ -162,7 +175,7 @@ export function MonthlyReportSection({
 
   // Lọc nhóm lớp theo bộ lọc Khối và Lớp
   const filteredClassReports = useMemo<MonthlyClassReport[]>(() => {
-    return allClassReports.filter((clsGroup) => {
+    const list = allClassReports.filter((clsGroup) => {
       if (
         selectedGrade !== "all" &&
         clsGroup.grade !== Number(selectedGrade)
@@ -176,6 +189,13 @@ export function MonthlyReportSection({
         return false;
       }
       return true;
+    });
+
+    return list.sort((a, b) => {
+      if (a.grade !== b.grade) {
+        return a.grade - b.grade;
+      }
+      return a.className.localeCompare(b.className, "vi", { numeric: true });
     });
   }, [allClassReports, selectedGrade, selectedClassId]);
 
@@ -586,155 +606,186 @@ export function MonthlyReportSection({
               <EmptyState title="Không có học sinh vắng hoặc đi muộn trong tháng đã chọn." />
             </Card>
           ) : (
-            <div className="space-y-6">
-              {filteredClassReports.map((clsGroup) => (
-                <div
-                  key={clsGroup.classId || clsGroup.className}
-                  className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs p-4 space-y-3"
-                >
-                  {/* Header Lớp */}
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center justify-center font-extrabold text-xs text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
-                        K{clsGroup.grade}
-                      </span>
-                      <h3 className="text-sm font-bold text-slate-900">
-                        Lớp {clsGroup.className}
-                      </h3>
-                      <span className="text-slate-400">•</span>
-                      <span className="text-xs text-slate-500 font-medium">
-                        {clsGroup.students.length} học sinh
-                      </span>
-                    </div>
+            <div className="space-y-4">
+              {filteredClassReports.map((clsGroup) => {
+                const classKey = clsGroup.classId || clsGroup.className;
+                const isOpen = openClassIds.has(classKey);
 
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-                      <span className="bg-slate-100 text-slate-700 border border-slate-200/80 px-2.5 py-1 rounded-lg">
-                        Vắng ban đầu: {clsGroup.totalRawAbsent}
-                      </span>
-                      <span className="bg-teal-50 text-teal-800 border border-teal-200 px-2.5 py-1 rounded-lg">
-                        Đã học bù: {clsGroup.totalMadeUp}
-                      </span>
-                      <span className="bg-rose-50 text-rose-800 border border-rose-200 px-2.5 py-1 rounded-lg">
-                        Vắng còn lại: {clsGroup.totalRemainingAbsent}
-                      </span>
-                      <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg">
-                        Tổng muộn: {clsGroup.totalLate}
-                      </span>
-                    </div>
-                  </div>
+                // Sort students inside each class by numeric candidateNumber (SBD)
+                const sortedStudents = [...clsGroup.students].sort((a, b) => {
+                  const numA = Number(a.candidateNumber);
+                  const numB = Number(b.candidateNumber);
+                  if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+                    return numA - numB;
+                  }
+                  return String(a.candidateNumber).localeCompare(
+                    String(b.candidateNumber),
+                    "vi",
+                    { numeric: true }
+                  );
+                });
 
-                  {/* Bảng/Danh sách học sinh */}
-                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
-                    {clsGroup.students.map((st) => (
-                      <div
-                        key={st.studentId}
-                        className="p-3 bg-white hover:bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
-                      >
-                        {/* Thông tin học sinh */}
-                        <div className="flex flex-wrap items-center gap-2.5 min-w-[280px]">
-                          <span className="font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200/60">
-                            {st.className}
-                          </span>
-                          <span className="font-bold text-slate-900 text-sm">
-                            {st.candidateNumber} — {st.shortName}
-                          </span>
-                          <div className="flex items-center gap-1.5 ml-1 text-slate-600 flex-wrap">
-                            <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px] font-medium">
-                              Tổng lượt: <strong>{st.totalSessions}</strong>
-                            </span>
-                            <span className="bg-slate-100 text-slate-700 border border-slate-200/80 px-2 py-0.5 rounded text-[11px] font-semibold">
-                              Vắng ban đầu: {st.rawAbsentCount}
-                            </span>
-                            <span className="bg-teal-50 text-teal-800 border border-teal-200/80 px-2 py-0.5 rounded text-[11px] font-bold">
-                              Đã học bù: {st.madeUpCount}
-                            </span>
-                            <span className="bg-rose-50 text-rose-800 border border-rose-200/80 px-2 py-0.5 rounded text-[11px] font-bold">
-                              Vắng còn lại: {st.remainingAbsentCount}
-                            </span>
-                            <span className="bg-amber-50 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded text-[11px] font-bold">
-                              Muộn: {st.lateCount}
-                            </span>
-                          </div>
-                        </div>
+                return (
+                  <div
+                    key={classKey}
+                    id={`monthly-class-card-${classKey}`}
+                    className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs transition-all"
+                  >
+                    {/* Header Lớp - Clickable to open/close accordion */}
+                    <button
+                      type="button"
+                      onClick={() => toggleClassAccordion(classKey)}
+                      aria-expanded={isOpen}
+                      className="w-full p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-left hover:bg-slate-50/80 active:bg-slate-100 transition-colors cursor-pointer select-none"
+                    >
+                      {/* Tiêu đề lớp & Số học sinh */}
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-slate-500 font-bold text-sm select-none w-4 text-center">
+                          {isOpen ? "▾" : "▸"}
+                        </span>
+                        <span className="inline-flex items-center justify-center font-extrabold text-xs text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                          K{clsGroup.grade}
+                        </span>
+                        <h3 className="text-sm font-bold text-slate-900">
+                          Lớp {clsGroup.className}
+                        </h3>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-xs text-slate-500 font-medium">
+                          {clsGroup.students.length} học sinh
+                        </span>
+                      </div>
 
-                        {/* Cột các buổi vắng & Checkbox Học bù */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-slate-500 font-semibold text-[11px] whitespace-nowrap">
-                            Các buổi vắng:
-                          </span>
-                          {(() => {
-                            const studentAbsentRecords =
-                              studentAbsentRecordsMap[st.studentId] || [];
-                            if (studentAbsentRecords.length === 0) {
-                              return (
-                                <span className="text-slate-400 italic">
-                                  Không có
+                      {/* Các số liệu tổng hợp của Lớp */}
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-semibold pl-6 md:pl-0">
+                        <span className="bg-slate-100 text-slate-700 border border-slate-200/80 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg">
+                          Vắng ban đầu: {clsGroup.totalRawAbsent}
+                        </span>
+                        <span className="bg-teal-50 text-teal-800 border border-teal-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg">
+                          Đã học bù: {clsGroup.totalMadeUp}
+                        </span>
+                        <span className="bg-rose-50 text-rose-800 border border-rose-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg">
+                          Vắng còn lại: {clsGroup.totalRemainingAbsent}
+                        </span>
+                        <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg">
+                          Tổng muộn: {clsGroup.totalLate}
+                        </span>
+                      </div>
+                    </button>
+
+                    {/* Danh sách học sinh khi mở Accordion */}
+                    {isOpen && (
+                      <div className="border-t border-slate-200/80 bg-slate-50/40 p-3 sm:p-4">
+                        <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs">
+                          {sortedStudents.map((st) => (
+                            <div
+                              key={st.studentId}
+                              className="p-3 bg-white hover:bg-slate-50/60 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs transition-colors"
+                            >
+                              {/* Thông tin học sinh */}
+                              <div className="flex flex-wrap items-center gap-2 min-w-[260px]">
+                                <span className="font-bold text-slate-900 text-sm">
+                                  {st.candidateNumber} — {st.shortName}
                                 </span>
-                              );
-                            }
-                            return (
+                                <div className="flex items-center gap-1.5 ml-1 text-slate-600 flex-wrap">
+                                  <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px] font-medium">
+                                    Tổng lượt: <strong>{st.totalSessions}</strong>
+                                  </span>
+                                  <span className="bg-slate-100 text-slate-700 border border-slate-200/80 px-2 py-0.5 rounded text-[11px] font-semibold">
+                                    Vắng ban đầu: {st.rawAbsentCount}
+                                  </span>
+                                  <span className="bg-teal-50 text-teal-800 border border-teal-200/80 px-2 py-0.5 rounded text-[11px] font-bold">
+                                    Đã học bù: {st.madeUpCount}
+                                  </span>
+                                  <span className="bg-rose-50 text-rose-800 border border-rose-200/80 px-2 py-0.5 rounded text-[11px] font-bold">
+                                    Vắng còn lại: {st.remainingAbsentCount}
+                                  </span>
+                                  <span className="bg-amber-50 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded text-[11px] font-bold">
+                                    Muộn: {st.lateCount}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Cột các buổi vắng & Checkbox Học bù */}
                               <div className="flex flex-wrap items-center gap-2">
-                                {studentAbsentRecords.map((rec) => {
-                                  const isUpdating =
-                                    madeUpUpdatingIds?.has(
-                                      rec.attendanceId
-                                    ) ?? false;
-                                  const isMadeUp = rec.isMadeUp === true;
-
+                                <span className="text-slate-500 font-semibold text-[11px] whitespace-nowrap">
+                                  Các buổi vắng:
+                                </span>
+                                {(() => {
+                                  const studentAbsentRecords =
+                                    studentAbsentRecordsMap[st.studentId] || [];
+                                  if (studentAbsentRecords.length === 0) {
+                                    return (
+                                      <span className="text-slate-400 italic">
+                                        Không có
+                                      </span>
+                                    );
+                                  }
                                   return (
-                                    <div
-                                      key={rec.attendanceId}
-                                      className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
-                                        isMadeUp
-                                          ? "bg-teal-50/80 border-teal-200 text-teal-900"
-                                          : "bg-rose-50/80 border-rose-200 text-rose-900"
-                                      }`}
-                                    >
-                                      <label className="inline-flex items-center gap-1.5 cursor-pointer select-none touch-choice-label">
-                                        <input
-                                          type="checkbox"
-                                          checked={isMadeUp}
-                                          disabled={isUpdating}
-                                          onChange={(e) => {
-                                            if (isUpdating) return;
-                                            if (onUpdateMadeUpStatus) {
-                                              onUpdateMadeUpStatus(
-                                                rec.attendanceId,
-                                                e.target.checked
-                                              );
-                                            }
-                                          }}
-                                          className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 border-slate-300 disabled:opacity-50 cursor-pointer"
-                                        />
-                                        <span className="font-semibold">
-                                          {formatDateVn(rec.attendanceDate)} –{" "}
-                                          {getSessionLabel(rec.session)}
-                                        </span>
-                                      </label>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {studentAbsentRecords.map((rec) => {
+                                        const isUpdating =
+                                          madeUpUpdatingIds?.has(
+                                            rec.attendanceId
+                                          ) ?? false;
+                                        const isMadeUp = rec.isMadeUp === true;
 
-                                      {isUpdating && (
-                                        <span className="text-[10px] font-bold text-amber-600 animate-pulse">
-                                          Đang lưu...
-                                        </span>
-                                      )}
+                                        return (
+                                          <div
+                                            key={rec.attendanceId}
+                                            className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
+                                              isMadeUp
+                                                ? "bg-teal-50/80 border-teal-200 text-teal-900"
+                                                : "bg-rose-50/80 border-rose-200 text-rose-900"
+                                            }`}
+                                          >
+                                            <label className="inline-flex items-center gap-1.5 cursor-pointer select-none touch-choice-label">
+                                              <input
+                                                type="checkbox"
+                                                checked={isMadeUp}
+                                                disabled={isUpdating}
+                                                onChange={(e) => {
+                                                  if (isUpdating) return;
+                                                  if (onUpdateMadeUpStatus) {
+                                                    onUpdateMadeUpStatus(
+                                                      rec.attendanceId,
+                                                      e.target.checked
+                                                    );
+                                                  }
+                                                }}
+                                                className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300 disabled:opacity-50 cursor-pointer"
+                                              />
+                                              <span className="font-semibold">
+                                                {formatDateVn(rec.attendanceDate)} –{" "}
+                                                {getSessionLabel(rec.session)}
+                                              </span>
+                                            </label>
 
-                                      {!isUpdating && isMadeUp && (
-                                        <span className="text-[10px] font-bold text-teal-700 bg-teal-100/80 px-1.5 py-0.5 rounded border border-teal-300/60">
-                                          Đã học bù
-                                        </span>
-                                      )}
+                                            {isUpdating && (
+                                              <span className="text-[10px] font-bold text-amber-600 animate-pulse">
+                                                Đang lưu...
+                                              </span>
+                                            )}
+
+                                            {!isUpdating && isMadeUp && (
+                                              <span className="text-[10px] font-bold text-teal-700 bg-teal-100/80 px-1.5 py-0.5 rounded border border-teal-300/60">
+                                                Đã học bù
+                                              </span>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   );
-                                })}
+                                })()}
                               </div>
-                            );
-                          })()}
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>

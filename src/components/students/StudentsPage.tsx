@@ -396,30 +396,7 @@ export function StudentsPage({
     setActiveDetailClassId(classId);
   };
 
-  // Nếu đang ở chế độ Chi tiết lớp
-  if (activeDetailClassId) {
-    const activeClass = classes.find((c) => c.classId === activeDetailClassId);
-
-    if (activeClass) {
-      const classStudents = students.filter(
-        (s) => s.classId === activeDetailClassId
-      );
-
-      return (
-        <ClassDetailView
-          schoolClass={activeClass}
-          classStudents={classStudents}
-          allStudents={students}
-          allClasses={classes}
-          onBack={() => setActiveDetailClassId(null)}
-          onSaveStudent={handleSaveStudent}
-          onDeleteStudent={handleDeleteStudent}
-        />
-      );
-    }
-  }
-
-  // Chế độ Danh sách lớp bình thường
+  // Tính toán tìm kiếm và lọc học sinh (Luôn gọi hooks trước mọi conditional return)
   const isSearchActive = searchTerm.trim() !== "";
 
   const filteredStudents = useMemo(() => {
@@ -461,6 +438,31 @@ export function StudentsPage({
 
     return groupList;
   }, [isSearchActive, filteredStudents, classes]);
+
+  // Nếu đang ở chế độ Chi tiết lớp
+  if (activeDetailClassId) {
+    const activeClass = classes.find((c) => c.classId === activeDetailClassId);
+
+    if (activeClass) {
+      const classStudents = students.filter(
+        (s) => s.classId === activeDetailClassId
+      );
+
+      return (
+        <ClassDetailView
+          schoolClass={activeClass}
+          classStudents={classStudents}
+          allStudents={students}
+          allClasses={classes}
+          onBack={() => setActiveDetailClassId(null)}
+          onSaveStudent={handleSaveStudent}
+          onDeleteStudent={handleDeleteStudent}
+        />
+      );
+    }
+  }
+
+  // Chế độ Danh sách lớp bình thường
 
   const gradesToDisplay: GradeLevel[] =
     selectedGrade === "all" ? [...GRADE_LEVELS] : [selectedGrade];
