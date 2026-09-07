@@ -2,5 +2,5 @@
   "name": "Quản lý Học sinh Tăng cường",
   "description": "Hệ thống quản lý học sinh học tăng cường nội bộ cho giáo viên, tối ưu dữ liệu và phân quyền Admin/Giáo viên.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

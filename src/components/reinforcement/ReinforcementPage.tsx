@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect, FormEvent } from "react";
+import { useState, useRef, useEffect, useMemo, FormEvent } from "react";
 import { Card } from "../common/Card";
 import { Button } from "../common/Button";
 import { EmptyState } from "../common/EmptyState";
 import { useToast } from "../../hooks/useToast";
 import { Student } from "../../types/student";
 import { SchoolClass } from "../../types/academic";
+import { TeacherProfile } from "../../types/teacher";
+import { UserProfile } from "../../types/user";
 import { createStableId } from "../../utils/id";
 import { getNextDateForWeekday } from "../../utils/date";
 import { addDaysToDateStr } from "../../utils/dateRange";
@@ -29,6 +31,7 @@ import {
 } from "../../constants/extraStudy";
 import { ReinforcementDeleteModal } from "./ReinforcementDeleteModal";
 import { ReinforcementMoveModal } from "./ReinforcementMoveModal";
+import { AdminExtraStudyHistoryModal } from "./AdminExtraStudyHistoryModal";
 
 const DAYS_OF_WEEK = [
   "Thứ 2",
@@ -178,6 +181,8 @@ interface ReinforcementPageProps {
     startDate: string,
     endDate: string
   ) => Promise<ReinforcementScheduleRecord[]>;
+  currentUser?: UserProfile | null;
+  teachers?: TeacherProfile[];
 }
 
 export function ReinforcementPage({
@@ -192,6 +197,8 @@ export function ReinforcementPage({
   onDeleteRecord,
   onMoveRecord,
   onLoadHistoryRange,
+  currentUser,
+  teachers = [],
 }: ReinforcementPageProps) {
   const { showToast } = useToast();
 
@@ -526,6 +533,37 @@ export function ReinforcementPage({
     ? classes.find((c) => c.classId === moveStudent.classId)
     : null;
 
+  // Quyền Admin xem lịch sử xếp tăng cường
+  const isAdmin = currentUser?.role === "admin";
+
+  // State mở modal lịch sử xếp tăng cường (chỉ cho Admin)
+  const [historyStudentData, setHistoryStudentData] = useState<{
+    student: Student;
+    schoolClass: SchoolClass | null;
+  } | null>(null);
+
+  const handleOpenHistory = (
+    student: Student | undefined,
+    rec: ReinforcementScheduleRecord,
+    schoolClass?: SchoolClass | null
+  ) => {
+    if (!isAdmin) return;
+    const targetStudent: Student = student || {
+      studentId: rec.studentId,
+      fullName: `Học sinh ${rec.studentId}`,
+      candidateNumber: 0,
+      grade: 6,
+      classId: "",
+      isActive: true,
+      createdAt: "",
+      updatedAt: "",
+    };
+    setHistoryStudentData({
+      student: targetStudent,
+      schoolClass: schoolClass || null,
+    });
+  };
+
   // Helper định dạng ngày hiển thị DD/MM/YYYY
   const formatDateStr = (dateStr: string): string => {
     if (!dateStr) return "";
@@ -541,6 +579,34 @@ export function ReinforcementPage({
     afternoon: 2,
     evening: 3,
   };
+
+  const studentHistoryRecords = useMemo(() => {
+    if (!historyStudentData?.student?.studentId) return [];
+    const targetStudentId = historyStudentData.student.studentId;
+
+    return extraStudyRecords
+      .filter(
+        (r) =>
+          r.studentId === targetStudentId &&
+          (r.status === "scheduled" || !r.status)
+      )
+      .sort((a, b) => {
+        // Sắp xếp theo targetDate giảm dần (mới nhất trước)
+        const dateA = a.targetDate || "";
+        const dateB = b.targetDate || "";
+        if (dateA !== dateB) {
+          return dateB.localeCompare(dateA);
+        }
+        // Cùng targetDate: ưu tiên ca Sáng -> Chiều -> Tối
+        const pA = SESSION_ORDER[a.session] ?? 99;
+        const pB = SESSION_ORDER[b.session] ?? 99;
+        if (pA !== pB) {
+          return pA - pB;
+        }
+        // Cùng ca: createdAt giảm dần
+        return (b.createdAt || "").localeCompare(a.createdAt || "");
+      });
+  }, [historyStudentData, extraStudyRecords]);
 
   // Danh sách lịch sử archived đã qua xử lý lọc & sắp xếp
   const archivedRecords = extraStudyHistoryRecords
@@ -1003,13 +1069,18 @@ export function ReinforcementPage({
                                       return (
                                         <div
                                           key={rec.extraStudyId}
-                                          className="bg-white rounded-lg border border-slate-200/90 p-2.5 shadow-2xs space-y-1"
+                                          className={`bg-white rounded-lg border border-slate-200/90 p-2.5 shadow-2xs space-y-1 ${
+                                            isAdmin ? "transition-shadow hover:shadow-xs" : ""
+                                          }`}
                                         >
                                           <div className="flex items-center justify-between text-xs font-semibold">
                                             <span className="text-slate-700 font-bold">
                                               {cardClassTag}
                                             </span>
-                                            <div className="flex items-center gap-1.5">
+                                            <div
+                                              className="flex items-center gap-1.5"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
                                               <span
                                                 className={`px-2 py-0.5 rounded-md text-[10px] font-semibold ${
                                                   rec.type === "extra-study"
@@ -1022,9 +1093,10 @@ export function ReinforcementPage({
                                               <button
                                                 type="button"
                                                 aria-label={`Chuyển lịch học sinh SBD ${candidateNum}`}
-                                                onClick={() =>
-                                                  setRecordToMove(rec)
-                                                }
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setRecordToMove(rec);
+                                                }}
                                                 className="text-slate-500 hover:text-sky-600 hover:bg-sky-50 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer border border-slate-200/80"
                                                 title="Chuyển lịch"
                                               >
@@ -1033,9 +1105,10 @@ export function ReinforcementPage({
                                               <button
                                                 type="button"
                                                 aria-label={`Xóa học sinh SBD ${candidateNum} khỏi ca`}
-                                                onClick={() =>
-                                                  setRecordToDelete(rec)
-                                                }
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setRecordToDelete(rec);
+                                                }}
                                                 className="text-slate-400 hover:text-rose-600 p-0.5 rounded hover:bg-rose-50 transition-colors cursor-pointer text-xs font-bold leading-none ml-0.5"
                                                 title="Xóa khỏi ca"
                                               >
@@ -1043,11 +1116,45 @@ export function ReinforcementPage({
                                               </button>
                                             </div>
                                           </div>
-                                          <div className="text-sm font-bold text-slate-900">
-                                            {candidateNum} — {shortName}
-                                          </div>
-                                          <div className="text-xs font-medium text-slate-500">
-                                            {subjectLabel}
+
+                                          {/* Vùng thông tin học sinh - Admin click để mở Lịch sử xếp tăng cường */}
+                                          <div
+                                            onClick={() => {
+                                              if (isAdmin) {
+                                                handleOpenHistory(student, rec, schoolClass);
+                                              }
+                                            }}
+                                            className={
+                                              isAdmin
+                                                ? "cursor-pointer group/history rounded py-0.5 -mx-1 px-1 hover:bg-teal-50/60 transition-colors"
+                                                : ""
+                                            }
+                                            title={
+                                              isAdmin
+                                                ? "Nhấp để xem lịch sử xếp tăng cường của học sinh này"
+                                                : undefined
+                                            }
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <div
+                                                className={`text-sm font-bold text-slate-900 ${
+                                                  isAdmin
+                                                    ? "group-hover/history:text-teal-700 transition-colors"
+                                                    : ""
+                                                }`}
+                                              >
+                                                {candidateNum} — {shortName}
+                                              </div>
+                                              {isAdmin && (
+                                                <span className="text-[10px] text-teal-600 font-medium opacity-0 group-hover/history:opacity-100 transition-opacity flex items-center gap-0.5">
+                                                  <span>Lịch sử</span>
+                                                  <span className="text-xs">›</span>
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-xs font-medium text-slate-500">
+                                              {subjectLabel}
+                                            </div>
                                           </div>
                                         </div>
                                       );
@@ -1300,6 +1407,18 @@ export function ReinforcementPage({
         onConfirm={handleConfirmMove}
         isMoving={movingRecordId === recordToMove?.extraStudyId}
       />
+
+      {isAdmin && (
+        <AdminExtraStudyHistoryModal
+          open={!!historyStudentData}
+          student={historyStudentData?.student || null}
+          schoolClass={historyStudentData?.schoolClass || null}
+          records={studentHistoryRecords}
+          teachers={teachers}
+          currentUser={currentUser}
+          onClose={() => setHistoryStudentData(null)}
+        />
+      )}
     </div>
   );
 }

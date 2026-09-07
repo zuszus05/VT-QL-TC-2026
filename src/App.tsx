@@ -2318,6 +2318,8 @@ function AppContent() {
             onDeleteRecord={handleDeleteExtraStudyRecord}
             onMoveRecord={handleMoveExtraStudyRecord}
             onLoadHistoryRange={handleLoadExtraStudyRange}
+            currentUser={currentUser}
+            teachers={teachers}
           />
         );
       case "attendance": {
